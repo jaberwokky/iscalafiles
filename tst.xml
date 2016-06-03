@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="windows-1251"?>
+<!DOCTYPE POWERMART SYSTEM "powrmart.dtd">
+<POWERMART CREATION_DATE="05/25/2016 02:04:27" REPOSITORY_VERSION="182.91">
+<REPOSITORY NAME="RS_DEV" VERSION="182" CODEPAGE="MS1251" DATABASETYPE="Oracle">
+<FOLDER NAME="DM_SAS_MA" GROUP="" OWNER="Administrator" SHARED="NOTSHARED" DESCRIPTION="" PERMISSIONS="rwx---r--" UUID="3e7d60e6-bf49-4526-99eb-ce21a42c6fa4">
+    <MAPPING DESCRIPTION ="" ISVALID ="YES" NAME ="m_PREDM_CNTRP_REL" OBJECTVERSION ="1" VERSIONNUMBER ="1">
+        <TRANSFORMATION DESCRIPTION ="" NAME ="SQ_CA_CLIENT_INFORMATION" OBJECTVERSION ="1" REUSABLE ="NO" TYPE ="Source Qualifier" VERSIONNUMBER ="1">
+            <TRANSFORMFIELD DATATYPE ="string" DEFAULTVALUE ="" DESCRIPTION ="" NAME ="EID" PICTURETEXT ="" PORTTYPE ="INPUT/OUTPUT" PRECISION ="50" SCALE ="0"/>
+            <TRANSFORMFIELD DATATYPE ="double" DEFAULTVALUE ="" DESCRIPTION ="" NAME ="CNTRP_RK" PICTURETEXT ="" PORTTYPE ="INPUT/OUTPUT" PRECISION ="15" SCALE ="0"/>
+            <TRANSFORMFIELD DATATYPE ="string" DEFAULTVALUE ="" DESCRIPTION ="" NAME ="CNTRP_CCD" PICTURETEXT ="" PORTTYPE ="INPUT/OUTPUT" PRECISION ="30" SCALE ="0"/>
+            <TRANSFORMFIELD DATATYPE ="string" DEFAULTVALUE ="" DESCRIPTION ="" NAME ="PREV_EID" PICTURETEXT ="" PORTTYPE ="INPUT/OUTPUT" PRECISION ="30" SCALE ="0"/>
+            <TRANSFORMFIELD DATATYPE ="date/time" DEFAULTVALUE ="" DESCRIPTION ="" NAME ="EFFECTIVE_FROM_DT" PICTURETEXT ="" PORTTYPE ="INPUT/OUTPUT" PRECISION ="29" SCALE ="9"/>
+            <TABLEATTRIBUTE NAME ="Sql Query" VALUE ="with&#xD;&#xA;  nat_pers as&#xD;&#xA;  (&#xD;&#xA;    select&#xD;&#xA;      /*+parallel(8)*/&#xD;&#xA;      distinct cnp.counterparty_rk counterparty_rk,&#xD;&#xA;      cnp.last_name last_name,&#xD;&#xA;      cnp.first_name first_name,&#xD;&#xA;      cnp.middle_name middle_name,&#xD;&#xA;      cnp.sex sex,&#xD;&#xA;      cnp.birth_date birth_date,&#xD;&#xA;      cnp.country_ccd country_ccd&#xD;&#xA;    from&#xD;&#xA;      dds.counterparty_natural_person cnp&#xD;&#xA;    cross join xat.madm_cntrp_last_name_fltr ta&#xD;&#xA;    where&#xD;&#xA;      cnp.source_system_ccd = &apos;007&apos;&#xD;&#xA;      and cnp.valid_to_dttm = dt_inf(1)&#xD;&#xA;      and&#xD;&#xA;      (&#xD;&#xA;        cnp.first_name not like ta.filter&#xD;&#xA;        or cnp.last_name not like ta.filter&#xD;&#xA;        or cnp.middle_name not like ta.filter&#xD;&#xA;      )&#xD;&#xA;  )&#xD;&#xA;  ,&#xD;&#xA;  conter_type as&#xD;&#xA;  (&#xD;&#xA;    select&#xD;&#xA;      /*+parallel(8) materialize*/&#xD;&#xA;      rk&#xD;&#xA;    from&#xD;&#xA;      dds.xref_counterparty_type&#xD;&#xA;    where&#xD;&#xA;      ccd in&#xD;&#xA;      (&#xD;&#xA;        select&#xD;&#xA;          type&#xD;&#xA;        from&#xD;&#xA;          xat.counterparty_type_natural&#xD;&#xA;      )&#xD;&#xA;      and valid_to_dttm = dt_inf(1)&#xD;&#xA;  )&#xD;&#xA;  ,&#xD;&#xA;  client as -- зерно + основная информация по клиенту&#xD;&#xA;  (&#xD;&#xA;    select&#xD;&#xA;      /*+parallel(8) full(p) full(ic)*/&#xD;&#xA;      regexp_replace(ic.nk_ccd, &apos;^&#x5c;w+.#.&apos;) as eid, --EID&#xD;&#xA;      cnp.counterparty_rk as cntrp_rk --CNTRP_RK&#xD;&#xA;    from&#xD;&#xA;      idmap.counterparty ic&#xD;&#xA;    join nat_pers cnp&#xD;&#xA;    on&#xD;&#xA;      ic.rk = cnp.counterparty_rk&#xD;&#xA;    join dds.counterparty p&#xD;&#xA;    on&#xD;&#xA;      cnp.counterparty_rk = p.counterparty_rk&#xD;&#xA;      and p.source_system_ccd = &apos;007&apos;&#xD;&#xA;      and p.valid_to_dttm = dt_inf(1)&#xD;&#xA;    join conter_type t&#xD;&#xA;    on&#xD;&#xA;      p.counterparty_type_rk = t.rk&#xD;&#xA;    where&#xD;&#xA;      ic.source_system_ccd = &apos;007&apos;&#xD;&#xA;  )&#xD;&#xA;select&#xD;&#xA;  /*+parallel(8) full(cu)*/&#xD;&#xA;  c.eid,&#xD;&#xA;  c.cntrp_rk,&#xD;&#xA;  cu.cntrp_rk,&#xD;&#xA;  cu.cntrp_ccd,&#xD;&#xA;  case&#xD;&#xA;    when cu.source_system_ccd = &apos;007&apos;&#xD;&#xA;    then substr(cu.cntrp_ccd, 5)&#xD;&#xA;    when cu.source_system_ccd = &apos;001&apos;&#xD;&#xA;    then null&#xD;&#xA;  end as prev_eid,&#xD;&#xA;  trunc(cu.effective_from_dt) as effective_from_dt&#xD;&#xA;from&#xD;&#xA;  client c&#xD;&#xA;join dds.cntrp_unification cu&#xD;&#xA;on&#xD;&#xA;  c.cntrp_rk = cu.cntrp_rk&#xD;&#xA;  and cu.source_system_ccd in(&apos;001&apos;, &apos;007&apos;)&#xD;&#xA;  and cu.valid_to_dttm = dt_inf(1)&#xD;&#xA;  and cu.effective_to_dt = dt_inf(1)"/>
+            <TABLEATTRIBUTE NAME ="User Defined Join" VALUE =""/>
+            <TABLEATTRIBUTE NAME ="Source Filter" VALUE =""/>
+            <TABLEATTRIBUTE NAME ="Number Of Sorted Ports" VALUE ="0"/>
+            <TABLEATTRIBUTE NAME ="Tracing Level" VALUE ="Normal"/>
+            <TABLEATTRIBUTE NAME ="Select Distinct" VALUE ="NO"/>
+            <TABLEATTRIBUTE NAME ="Is Partitionable" VALUE ="NO"/>
+            <TABLEATTRIBUTE NAME ="Pre SQL" VALUE =""/>
+            <TABLEATTRIBUTE NAME ="Post SQL" VALUE =""/>
+            <TABLEATTRIBUTE NAME ="Output is deterministic" VALUE ="NO"/>
+            <TABLEATTRIBUTE NAME ="Output is repeatable" VALUE ="Never"/>
+        </TRANSFORMATION>
+        <TRANSFORMATION DESCRIPTION ="" NAME ="EXP_SYSFIELDS" OBJECTVERSION ="1" REUSABLE ="NO" TYPE ="Expression" VERSIONNUMBER ="1">
+            <TRANSFORMFIELD DATATYPE ="double" DEFAULTVALUE ="" DESCRIPTION ="" EXPRESSION ="EID" EXPRESSIONTYPE ="GENERAL" NAME ="EID" PICTURETEXT ="" PORTTYPE ="INPUT/OUTPUT" PRECISION ="15" SCALE ="0"/>
+            <TRANSFORMFIELD DATATYPE ="double" DEFAULTVALUE ="" DESCRIPTION ="" EXPRESSION ="CNTRP_RK" EXPRESSIONTYPE ="GENERAL" NAME ="CNTRP_RK" PICTURETEXT ="" PORTTYPE ="INPUT/OUTPUT" PRECISION ="15" SCALE ="0"/>
+            <TRANSFORMFIELD DATATYPE ="string" DEFAULTVALUE ="" DESCRIPTION ="" EXPRESSION ="CNTRP_CCD" EXPRESSIONTYPE ="GENERAL" NAME ="CNTRP_CCD" PICTURETEXT ="" PORTTYPE ="INPUT/OUTPUT" PRECISION ="30" SCALE ="0"/>
+            <TRANSFORMFIELD DATATYPE ="double" DEFAULTVALUE ="" DESCRIPTION ="" EXPRESSION ="PREV_EID" EXPRESSIONTYPE ="GENERAL" NAME ="PREV_EID" PICTURETEXT ="" PORTTYPE ="INPUT/OUTPUT" PRECISION ="15" SCALE ="0"/>
+            <TRANSFORMFIELD DATATYPE ="date/time" DEFAULTVALUE ="" DESCRIPTION ="" EXPRESSION ="EFFECTIVE_FROM_DT" EXPRESSIONTYPE ="GENERAL" NAME ="EFFECTIVE_FROM_DT" PICTURETEXT ="" PORTTYPE ="INPUT/OUTPUT" PRECISION ="29" SCALE ="9"/>
+            <TABLEATTRIBUTE NAME ="Tracing Level" VALUE ="Normal"/>
+            <METADATAEXTENSION DATATYPE ="STRING" DESCRIPTION ="Разработчик, создавший объект" DOMAINNAME ="User Defined Metadata Domain" ISCLIENTEDITABLE ="YES" ISCLIENTVISIBLE ="YES" ISREUSABLE ="YES" ISSHAREREAD ="NO" ISSHAREWRITE ="NO" MAXLENGTH ="256" NAME ="Author" VALUE ="" VENDORNAME ="INFORMATICA"/>
+            <METADATAEXTENSION DATATYPE ="STRING" DESCRIPTION ="Дата создания&#x5c;последнего обновления объекта в формате DD&#x5c;MM&#x5c;YYYY" DOMAINNAME ="User Defined Metadata Domain" ISCLIENTEDITABLE ="YES" ISCLIENTVISIBLE ="YES" ISREUSABLE ="YES" ISSHAREREAD ="NO" ISSHAREWRITE ="NO" MAXLENGTH ="10" NAME ="Creation Date" VALUE ="" VENDORNAME ="INFORMATICA"/>
+            <METADATAEXTENSION DATATYPE ="STRING" DESCRIPTION ="Ссылка или название документа, в котором описаны свойства соответвующего объекта" DOMAINNAME ="User Defined Metadata Domain" ISCLIENTEDITABLE ="YES" ISCLIENTVISIBLE ="YES" ISREUSABLE ="YES" ISSHAREREAD ="NO" ISSHAREWRITE ="NO" MAXLENGTH ="256" NAME ="Doc Link" VALUE ="" VENDORNAME ="INFORMATICA"/>
+            <METADATAEXTENSION DATATYPE ="STRING" DESCRIPTION ="Информация из Git репозитория: Branch, Tag, Commit" DOMAINNAME ="User Defined Metadata Domain" ISCLIENTEDITABLE ="YES" ISCLIENTVISIBLE ="YES" ISREUSABLE ="YES" ISSHAREREAD ="NO" ISSHAREWRITE ="NO" MAXLENGTH ="256" NAME ="GIT Info" VALUE ="" VENDORNAME ="INFORMATICA"/>
+        </TRANSFORMATION>
+        <INSTANCE DESCRIPTION ="" NAME ="CNTRP_REL" TRANSFORMATION_NAME ="CNTRP_REL" TRANSFORMATION_TYPE ="Target Definition" TYPE ="TARGET"/>
+        <INSTANCE DBDNAME ="IDMAP" DESCRIPTION ="" NAME ="COUNTERPARTY" TRANSFORMATION_NAME ="COUNTERPARTY" TRANSFORMATION_TYPE ="Source Definition" TYPE ="SOURCE"/>
+        <INSTANCE DBDNAME ="DDS" DESCRIPTION ="" NAME ="COUNTERPARTY_NATURAL_PERSON" TRANSFORMATION_NAME ="COUNTERPARTY_NATURAL_PERSON" TRANSFORMATION_TYPE ="Source Definition" TYPE ="SOURCE"/>
+        <INSTANCE DESCRIPTION ="" NAME ="SQ_CA_CLIENT_INFORMATION" REUSABLE ="NO" TRANSFORMATION_NAME ="SQ_CA_CLIENT_INFORMATION" TRANSFORMATION_TYPE ="Source Qualifier" TYPE ="TRANSFORMATION">
+            <ASSOCIATED_SOURCE_INSTANCE NAME ="COUNTERPARTY"/>
+            <ASSOCIATED_SOURCE_INSTANCE NAME ="COUNTERPARTY_NATURAL_PERSON"/>
+            <ASSOCIATED_SOURCE_INSTANCE NAME ="CNTRP_UNIFICATION"/>
+        </INSTANCE>
+        <INSTANCE DBDNAME ="DDS" DESCRIPTION ="" NAME ="CNTRP_UNIFICATION" TRANSFORMATION_NAME ="CNTRP_UNIFICATION" TRANSFORMATION_TYPE ="Source Definition" TYPE ="SOURCE"/>
+        <INSTANCE DESCRIPTION ="" NAME ="EXP_SYSFIELDS" REUSABLE ="NO" TRANSFORMATION_NAME ="EXP_SYSFIELDS" TRANSFORMATION_TYPE ="Expression" TYPE ="TRANSFORMATION"/>
+        <CONNECTOR FROMFIELD ="EID" FROMINSTANCE ="EXP_SYSFIELDS" FROMINSTANCETYPE ="Expression" TOFIELD ="EID" TOINSTANCE ="CNTRP_REL" TOINSTANCETYPE ="Target Definition"/>
+        <CONNECTOR FROMFIELD ="CNTRP_RK" FROMINSTANCE ="EXP_SYSFIELDS" FROMINSTANCETYPE ="Expression" TOFIELD ="CNTRP_RK" TOINSTANCE ="CNTRP_REL" TOINSTANCETYPE ="Target Definition"/>
+        <CONNECTOR FROMFIELD ="CNTRP_CCD" FROMINSTANCE ="EXP_SYSFIELDS" FROMINSTANCETYPE ="Expression" TOFIELD ="CNTRP_CCD" TOINSTANCE ="CNTRP_REL" TOINSTANCETYPE ="Target Definition"/>
+        <CONNECTOR FROMFIELD ="PREV_EID" FROMINSTANCE ="EXP_SYSFIELDS" FROMINSTANCETYPE ="Expression" TOFIELD ="PREV_EID" TOINSTANCE ="CNTRP_REL" TOINSTANCETYPE ="Target Definition"/>
+        <CONNECTOR FROMFIELD ="EFFECTIVE_FROM_DT" FROMINSTANCE ="EXP_SYSFIELDS" FROMINSTANCETYPE ="Expression" TOFIELD ="EFFECTIVE_FROM_DT" TOINSTANCE ="CNTRP_REL" TOINSTANCETYPE ="Target Definition"/>
+        <CONNECTOR FROMFIELD ="NK_CCD" FROMINSTANCE ="COUNTERPARTY" FROMINSTANCETYPE ="Source Definition" TOFIELD ="EID" TOINSTANCE ="SQ_CA_CLIENT_INFORMATION" TOINSTANCETYPE ="Source Qualifier"/>
+        <CONNECTOR FROMFIELD ="COUNTERPARTY_RK" FROMINSTANCE ="COUNTERPARTY_NATURAL_PERSON" FROMINSTANCETYPE ="Source Definition" TOFIELD ="CNTRP_RK" TOINSTANCE ="SQ_CA_CLIENT_INFORMATION" TOINSTANCETYPE ="Source Qualifier"/>
+        <CONNECTOR FROMFIELD ="CNTRP_CCD" FROMINSTANCE ="CNTRP_UNIFICATION" FROMINSTANCETYPE ="Source Definition" TOFIELD ="CNTRP_CCD" TOINSTANCE ="SQ_CA_CLIENT_INFORMATION" TOINSTANCETYPE ="Source Qualifier"/>
+        <CONNECTOR FROMFIELD ="CNTRP_CCD" FROMINSTANCE ="CNTRP_UNIFICATION" FROMINSTANCETYPE ="Source Definition" TOFIELD ="PREV_EID" TOINSTANCE ="SQ_CA_CLIENT_INFORMATION" TOINSTANCETYPE ="Source Qualifier"/>
+        <CONNECTOR FROMFIELD ="EFFECTIVE_FROM_DT" FROMINSTANCE ="CNTRP_UNIFICATION" FROMINSTANCETYPE ="Source Definition" TOFIELD ="EFFECTIVE_FROM_DT" TOINSTANCE ="SQ_CA_CLIENT_INFORMATION" TOINSTANCETYPE ="Source Qualifier"/>
+        <CONNECTOR FROMFIELD ="CNTRP_RK" FROMINSTANCE ="SQ_CA_CLIENT_INFORMATION" FROMINSTANCETYPE ="Source Qualifier" TOFIELD ="CNTRP_RK" TOINSTANCE ="EXP_SYSFIELDS" TOINSTANCETYPE ="Expression"/>
+        <CONNECTOR FROMFIELD ="CNTRP_CCD" FROMINSTANCE ="SQ_CA_CLIENT_INFORMATION" FROMINSTANCETYPE ="Source Qualifier" TOFIELD ="CNTRP_CCD" TOINSTANCE ="EXP_SYSFIELDS" TOINSTANCETYPE ="Expression"/>
+        <CONNECTOR FROMFIELD ="EFFECTIVE_FROM_DT" FROMINSTANCE ="SQ_CA_CLIENT_INFORMATION" FROMINSTANCETYPE ="Source Qualifier" TOFIELD ="EFFECTIVE_FROM_DT" TOINSTANCE ="EXP_SYSFIELDS" TOINSTANCETYPE ="Expression"/>
+        <CONNECTOR FROMFIELD ="EID" FROMINSTANCE ="SQ_CA_CLIENT_INFORMATION" FROMINSTANCETYPE ="Source Qualifier" TOFIELD ="EID" TOINSTANCE ="EXP_SYSFIELDS" TOINSTANCETYPE ="Expression"/>
+        <CONNECTOR FROMFIELD ="PREV_EID" FROMINSTANCE ="SQ_CA_CLIENT_INFORMATION" FROMINSTANCETYPE ="Source Qualifier" TOFIELD ="PREV_EID" TOINSTANCE ="EXP_SYSFIELDS" TOINSTANCETYPE ="Expression"/>
+        <TARGETLOADORDER ORDER ="1" TARGETINSTANCE ="CNTRP_REL"/>
+        <ERPINFO/>
+    </MAPPING>
+</FOLDER>
+</REPOSITORY>
+</POWERMART>
